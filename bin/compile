@@ -6,33 +6,51 @@ mkdir -p "$1" "$2"
 BUILD_PATH=$(cd "$1/" && pwd)
 CACHE_PATH=$(cd "$2/" && pwd)
 
-VERSION=1.0.0
+VERSION=1.0.2
+BUILDPACK_VERSION=$VERSION
+BUILDPACK_VERSION_FILE=$CACHE_PATH/$SODIUM_DIR/BUILDPACK_VERSION 
+
+HASH=961d8f10047f545ae658bcc73b8ab0bf2c312ac945968dd579d87c768e5baa19
 SODIUM_DIR=libsodium-$VERSION
 TARBALL=$SODIUM_DIR.tar.gz
 TARBALL_URL=https://download.libsodium.org/libsodium/releases/$TARBALL
 
 indent() {
-  sed -u "s/^/       /"
+  sed -u "s/^/$INDENT/"
 }
 
-if [ ! -d $CACHE_PATH/$SODIUM_DIR ];
+if !(test -f $BUILDPACK_VERSION_FILE && grep -q $BUILDPACK_VERSION $BUILDPACK_VERSION_FILE);
 then
   cd $CACHE_PATH
 
   echo -n "-----> Fetching libsodium... "
   curl --silent --remote-name --insecure --location $TARBALL_URL
+  echo "done"
+
+  echo -n "-----> Verifying libsodium SHA256... "
+  if (sha256sum $TARBALL | grep $HASH &> /dev/null); then
+    echo $HASH
+  else
+    echo "failed to verify tarball!"
+    exit 1
+  fi
+
+  echo -n "-----> Extracting libsodium... "
   tar -xf $TARBALL
   rm $TARBALL
   echo "done"
 
   echo -n "-----> Configuring libsodium... "
   cd $SODIUM_DIR
-  ./configure --silent --disable-debug --disable-dependency-tracking
+  ./configure --disable-debug --silent --disable-dependency-tracking
   echo "done"
 
   echo -n "-----> Compiling libsodium... "
   make &> /dev/null
+  make check &> /dev/null
   echo "done"
+
+  echo $BUILDPACK_VERSION > $BUILDPACK_VERSION_FILE
 fi
 
 echo -n "-----> Copying libsodium ($VERSION)... "
